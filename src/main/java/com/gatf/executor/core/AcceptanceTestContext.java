@@ -45,7 +45,6 @@ import org.reficio.ws.builder.SoapOperation;
 import org.reficio.ws.builder.core.Wsdl;
 import org.w3c.dom.Document;
 
-import com.gatf.executor.dataprovider.SQLDatabaseTestDataSource;
 import com.gatf.executor.dataprovider.FileTestDataProvider;
 import com.gatf.executor.dataprovider.GatfTestDataConfig;
 import com.gatf.executor.dataprovider.GatfTestDataProvider;
@@ -54,6 +53,7 @@ import com.gatf.executor.dataprovider.GatfTestDataSourceHook;
 import com.gatf.executor.dataprovider.InlineValueTestDataProvider;
 import com.gatf.executor.dataprovider.MongoDBTestDataSource;
 import com.gatf.executor.dataprovider.RandomValueTestDataProvider;
+import com.gatf.executor.dataprovider.SQLDatabaseTestDataSource;
 import com.gatf.executor.dataprovider.TestDataHook;
 import com.gatf.executor.dataprovider.TestDataProvider;
 import com.gatf.executor.dataprovider.TestDataSource;
@@ -828,7 +828,35 @@ public class AcceptanceTestContext {
 			}
 			
 			List<Map<String, String>> testData = getProviderData(provider, null);
-			providerTestDataMap.put(provider.getProviderName(), testData);
+			if(gatfExecutorConfig.isSeleniumExecutor() && gatfExecutorConfig.getConcurrentUserSimulationNum()>1) {
+			    for (int i = 0; i < gatfExecutorConfig.getConcurrentUserSimulationNum(); i++)
+                {
+			        if(FileTestDataProvider.class.getCanonicalName().equals(provider.getProviderClass().trim())) {
+			            if(i==0) {
+			                providerTestDataMap.put(provider.getProviderName()+(i+1), testData);
+			                continue;
+			            }
+			            GatfTestDataProvider tp = new GatfTestDataProvider(provider);
+	                    tp.setProviderName(provider.getProviderName()+(i+1));
+	                    tp.getArgs()[0] = tp.getArgs()[0] + i;
+	                    try {
+	                        logger.info("Concurrent simulation scenario #"+(i+1)+" fetching provider with filePath "+tp.getArgs()[0]);
+	                        List<Map<String, String>> testDataT = getProviderData(tp, null);
+	                        if(testDataT==null) {
+	                            testDataT = testData;
+	                        }
+	                        providerTestDataMap.put(tp.getProviderName(), testDataT);
+	                    } catch (Throwable e) {
+	                        logger.severe("Cannot find data provider for the concurrent simulation scenario #"+(i+1)+" with name " + tp.getProviderName());
+	                        providerTestDataMap.put(tp.getProviderName(), testData);
+	                    }
+			        } else {
+			            logger.severe("Concurrent simulation scenarios need file data providers");
+			        }
+                }
+			} else {
+			    providerTestDataMap.put(provider.getProviderName(), testData);
+			}
 		}
 	}
 	
